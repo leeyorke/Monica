@@ -1,24 +1,18 @@
-# PiBrowse
+# Monica
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/pibrowse-logo-dark.png">
-  <img src="assets/pibrowse-logo.png" alt="PiBrowse" width="420">
-</picture>
-
-PiBrowse is an open-source fingerprint browser for keeping browser profiles
+Monica is an open-source fingerprint browser for keeping browser profiles
 separate. Run it locally or self-host it for your team.
 
-[Website](https://pibrowse.dev/) · [Aron on X](https://x.com/aronhouyu) ·
-[Report a bug or request a feature](https://github.com/aronhy/pibrowse/issues)
+[Aron on X](https://x.com/aronhouyu)
 
-## Why I started PiBrowse
+## Why I started Monica
 
 I got tired of how many fingerprint browsers require a subscription. Then I
 found Fury. Its open source gave me a starting point I could build on, and
-that's how PiBrowse began.
+that's how Monica began.
 
 **The open-source edition will always be free to download, use locally, and
-self-host.** PiBrowse Cloud is a separate, optional paid hosting service for
+self-host.** Monica Cloud is a separate, optional paid hosting service for
 teams and is still in development.
 
 — Aron
@@ -29,7 +23,7 @@ teams and is still in development.
 - [Team self-hosting guide](docs/13-self-hosting.md)
 
 These guides come from [Fury](https://github.com/furyteamtop/fury-antidetect-browser).
-Thanks to Bogdan Shapovalov and the Fury contributors. PiBrowse is licensed
+Thanks to Bogdan Shapovalov and the Fury contributors. Monica is licensed
 under [AGPL-3.0-or-later](LICENSE).
 
 <details>
