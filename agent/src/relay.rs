@@ -165,7 +165,7 @@ pub struct Relay {
     /// where they were, able to see what happened rather than finding the
     /// profile gone. Shared with the IP-watch task, which sets it; see
     /// `trip_handle`.
-    tripped: std::sync::Arc<std::sync::AtomicBool>,
+    tripped: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl Relay {
@@ -181,7 +181,7 @@ impl Relay {
             token,
             port: Default::default(),
             allow_local: false,
-            tripped: std::sync::Arc::new(std::sync::AtomicBool::new(false)),
+            tripped: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
     }
 
@@ -189,7 +189,7 @@ impl Relay {
     /// the relay (the same reason `start_url` is called before it). The
     /// IP-watch task keeps this and sets it when the exit moves; every
     /// connection the relay handles reads it.
-    pub fn trip_handle(&self) -> std::sync::Arc<std::sync::AtomicBool> {
+    pub fn trip_handle(&self) -> std::sync::Arc<std::sync::atomic::AtomicBool> {
         std::sync::Arc::clone(&self.tripped)
     }
 
@@ -392,7 +392,7 @@ impl Relay {
         // indistinguishable from inside the browser — nothing leaks that the
         // address changed, or that a guard tripped. Checked after the local
         // routes so the start page still renders.
-        if self.tripped.load(std::sync::Ordering::Relaxed) {
+        if self.tripped.load(std::sync::atomic::Ordering::Relaxed) {
             tracing::debug!(target = %host, "exit IP changed — relay tripped, refusing");
             let _ = client
                 .write_all(b"HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n")

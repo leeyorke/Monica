@@ -231,7 +231,7 @@ struct Running {
     /// browser is offline until someone acts. Read by `running_state` so the
     /// shell can say why a profile that is still open has gone dark. `None`
     /// when there was no proxy to watch.
-    trip: Option<std::sync::Arc<std::sync::AtomicBool>>,
+    trip: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
 }
 
 /// The backstop for an entry that leaves the map by any road but `stop`.
@@ -1735,7 +1735,7 @@ impl Agent {
                             && entry
                                 .trip
                                 .as_ref()
-                                .is_some_and(|t| t.load(std::sync::Ordering::Relaxed))
+                                .is_some_and(|t| t.load(std::sync::atomic::Ordering::Relaxed))
                         {
                             tripped.insert(id.clone());
                         }
@@ -3087,8 +3087,11 @@ impl Agent {
         let start_page = relay.start_url();
         // Cloned out before `serve` consumes the relay: the IP-watch task sets
         // this when the exit moves, and every connection the relay then handles
-        // fails closed. Absent when no proxy — there is nothing to watch.
-        let trip = watch_exit.then(|| relay.trip_handle());
+        // fails closed. Created unconditionally because the handle has to be
+        // taken before the relay is consumed, but only armed (stored on the
+        // Running entry and handed to the watcher) when a proxy is present to
+        // watch — see `watch_exit` below.
+        let trip = relay.trip_handle();
         let (relay_port, relay_task) = relay.serve(0).await?;
         // The detect-suite probe, on the relay's own loopback address rather
         // than on `fury.invalid`, and the difference is not cosmetic: loopback
@@ -3475,10 +3478,11 @@ impl Agent {
         let heartbeat = heartbeat_guard.0.take();
 
         // The watch task and the running entry share the one trip switch: the
-        // task sets it, the relay reads it, and `running_state` reports it.
-        // Cloned here, ahead of the entry taking its own, because the entry is
-        // inserted below and would otherwise move the last handle away.
-        let watch_trip = trip.clone();
+        // task sets it, the relay reads it, and profiles.list reports it. Only
+        // armed when there is a proxy to watch — with no proxy the exit is this
+        // machine and there is nothing to guard, so the entry carries `None`
+        // and the relay never trips.
+        let watch_trip = watch_exit.then(|| trip.clone());
 
         self.running.lock().await.insert(
             profile.id.clone(),
@@ -3494,7 +3498,7 @@ impl Agent {
                 lock_token,
                 heartbeat,
                 ip_watch: None,
-                trip,
+                trip: watch_trip.clone(),
             },
         );
 
@@ -3541,7 +3545,7 @@ impl Agent {
                                 // happened. The profile is still "running" in
                                 // every other respect, so the shell is told
                                 // why it went dark through `running_state`.
-                                trip.store(true, std::sync::Ordering::Relaxed);
+                                trip.store(true, std::sync::atomic::Ordering::Relaxed);
                                 return;
                             }
                         }
