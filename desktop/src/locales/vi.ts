@@ -604,6 +604,8 @@ export const vi: Record<Key, string> = {
   "pd.watchExit": "Đóng hồ sơ này nếu IP lối ra của nó thay đổi",
   "pd.watchExitOn": "Trong khi hồ sơ đang mở, địa chỉ lối ra được kiểm tra lại mỗi phút thông qua proxy riêng của hồ sơ, và trình duyệt sẽ đóng nếu địa chỉ đã đổi. Một tài khoản chỉ an toàn khi mọi yêu cầu đều đi ra từ địa chỉ mà nó đã tích lịch sử. Proxy xoay vòng hoặc proxy di động chủ ý đổi địa chỉ — hãy tắt tính năng này với loại đó.",
   "pd.watchExitOff": "Cần proxy để theo dõi lối ra.",
+  "bar.exitIpTripped":
+    "IP lối ra của “{name}” đã đổi khi đang mở, nên kết nối bị cắt. Trình duyệt vẫn mở nhưng không tải được gì. Đóng rồi mở lại để nhận lối ra mới.",
   "pd.exit": "Lối ra",
   "pd.machine": "Thiết bị",
   "pd.machineHint": "Cấu hình đã đo của một máy thật, lấy nguyên vẹn. Chọn user agent và GPU riêng rẽ là cách khiến hồ sơ mô tả những thiết bị không tồn tại.",

@@ -604,6 +604,8 @@ export const fr: Record<Key, string> = {
   "pd.watchExit": "Fermer ce profil si son IP de sortie change",
   "pd.watchExitOn": "Tant que le profil est ouvert, son adresse de sortie est revérifiée chaque minute via le proxy propre au profil, et le navigateur se ferme si elle a changé. Un compte n'est sûr que tant que chaque requête part de l'adresse sur laquelle il a mûri. Un proxy rotatif ou mobile change d'adresse exprès : laissez ceci désactivé pour un tel proxy.",
   "pd.watchExitOff": "Un proxy est nécessaire pour surveiller la sortie.",
+  "bar.exitIpTripped":
+    "L'IP de sortie de « {name} » a changé pendant qu'il était ouvert, la connexion a donc été coupée. Le navigateur est toujours ouvert mais rien ne se charge. Fermez-le puis rouvrez-le pour obtenir une nouvelle sortie.",
   "pd.exit": "Sortie",
   "pd.machine": "Machine",
   "pd.machineHint": "La configuration mesurée d'une vraie machine, prise en entier. Choisir séparément un user agent et un GPU, c'est ainsi que des profils finissent par décrire des appareils qui n'existent pas.",

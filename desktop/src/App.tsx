@@ -268,6 +268,13 @@ export function App() {
    *  describes cannot get out of step. `forProfile` is null for a notice with
    *  no lifetime: an export that finished, an import that landed. */
   const [notice, setNotice] = useState<{ text: string; forProfile: string | null } | null>(null);
+  /** The open profile whose exit IP moved and whose relay has tripped, if any.
+   *
+   *  Kept apart from `notice` on purpose: a launch message and this must not
+   *  overwrite each other, and this one is not dismissed — it clears when the
+   *  agent's poll stops reporting the profile as tripped (the browser was
+   *  closed, or reopened on a fresh exit), not when the operator clicks. */
+  const [exitTripped, setExitTripped] = useState<{ id: string; name: string } | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   /** Which settings tab opens. "Connect a server" in Users means the team
@@ -407,6 +414,15 @@ export function App() {
             machine: current.machine_name,
           });
         return stillOpen ? n : null;
+      });
+      // The exit guard tripped under an open profile: the relay is refusing
+      // every target and the browser has gone dark. Driven off the same poll
+      // the agent already answers — there is no push channel. Cleared when no
+      // open row reports tripped any more, which is the browser being closed
+      // or reopened on a fresh exit; the operator does not dismiss it by hand.
+      setExitTripped(() => {
+        const row = rows.find((p) => p.running && p.relay_tripped);
+        return row ? { id: row.id, name: row.name } : null;
       });
       // Borrowed profiles come from a different endpoint and a different
       // account's organisation, so they are fetched separately and their
@@ -1246,6 +1262,12 @@ export function App() {
                 {shell.core_problem}
               </div>
             </div>
+          </div>
+        )}
+
+        {exitTripped && (
+          <div className="notice warnBar" role="alert">
+            {t("bar.exitIpTripped", { name: exitTripped.name })}
           </div>
         )}
 

@@ -159,6 +159,13 @@ pub struct Relay {
     /// Lets a check reach a checker on the operator's own network. Never set
     /// for a profile; see `is_local_target` in `handle_client`.
     allow_local: bool,
+    /// Tripped when the exit IP is seen to move under an open profile. Every
+    /// real connection then fails closed (502) so the browser stays open but
+    /// offline, instead of the agent closing it — the operator is left sitting
+    /// where they were, able to see what happened rather than finding the
+    /// profile gone. Shared with the IP-watch task, which sets it; see
+    /// `trip_handle`.
+    tripped: std::sync::Arc<std::sync::AtomicBool>,
 }
 
 impl Relay {
@@ -168,7 +175,22 @@ impl Relay {
         let token: String = (0..16)
             .map(|_| format!("{:02x}", rand::random::<u8>()))
             .collect();
-        Self { upstream, blocked: Default::default(), token, port: Default::default(), allow_local: false }
+        Self {
+            upstream,
+            blocked: Default::default(),
+            token,
+            port: Default::default(),
+            allow_local: false,
+            tripped: std::sync::Arc::new(std::sync::AtomicBool::new(false)),
+        }
+    }
+
+    /// A handle to the trip switch, to be cloned out BEFORE `serve` consumes
+    /// the relay (the same reason `start_url` is called before it). The
+    /// IP-watch task keeps this and sets it when the exit moves; every
+    /// connection the relay handles reads it.
+    pub fn trip_handle(&self) -> std::sync::Arc<std::sync::AtomicBool> {
+        std::sync::Arc::clone(&self.tripped)
     }
 
     /// For a check, not a profile: an IP checker the operator runs on their
@@ -357,6 +379,21 @@ impl Relay {
         let local = self.blocked.reached_locally(&host);
         if !local && !self.allow_local && is_local_target(&host) {
             tracing::debug!(target = %host, "local address refused");
+            let _ = client
+                .write_all(b"HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n")
+                .await;
+            return Ok(());
+        }
+
+        // The exit moved under an open profile, so every target now fails
+        // closed: the browser stays up and the operator stays where they were,
+        // but nothing is reachable. Answered here, on the same 502 shape as an
+        // unreachable upstream, so a tripped profile and a dead proxy are
+        // indistinguishable from inside the browser — nothing leaks that the
+        // address changed, or that a guard tripped. Checked after the local
+        // routes so the start page still renders.
+        if self.tripped.load(std::sync::Ordering::Relaxed) {
+            tracing::debug!(target = %host, "exit IP changed — relay tripped, refusing");
             let _ = client
                 .write_all(b"HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n")
                 .await;
