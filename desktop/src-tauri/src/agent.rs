@@ -105,6 +105,11 @@ pub struct LocalProfile {
     /// from every response written before the flag existed.
     #[serde(default)]
     pub allow_no_proxy: bool,
+    /// Close the browser if the exit IP changes while it is open. Read back by
+    /// the edit dialog; absent from every response written before the flag
+    /// existed.
+    #[serde(default)]
+    pub disconnect_on_ip_change: bool,
     #[serde(default)]
     pub start_urls: Vec<String>,
     /// Absent from the trash listing, where nothing is running by definition.

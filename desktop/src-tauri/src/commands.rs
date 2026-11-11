@@ -1280,6 +1280,12 @@ pub struct UiProfile {
     /// nobody should discover by accident. False for every team row.
     #[serde(default)]
     pub allow_no_proxy: bool,
+    /// Close the browser if the exit IP changes while it is open. Round-tripped
+    /// by the edit dialog like `allow_no_proxy`; absent from every response
+    /// written before the flag existed, and from every team row (the server
+    /// does not manage this — the agent does, at launch time).
+    #[serde(default)]
+    pub disconnect_on_ip_change: bool,
     /// `None` means "follow the proxy's exit", resolved by the agent at launch.
     /// Carried here because the edit dialog round-trips it — without these two
     /// fields, opening a profile and pressing save silently reset both.
@@ -1397,6 +1403,7 @@ async fn local_profiles() -> R<Vec<UiProfile>> {
             }),
             permissions: all_permissions(),
             allow_no_proxy: p.allow_no_proxy,
+            disconnect_on_ip_change: p.disconnect_on_ip_change,
             blocklists: p.blocklists,
             notes: p.notes,
             status: p.status,
@@ -1450,6 +1457,7 @@ pub async fn profiles(
                 }),
                 permissions: all_permissions(),
                 allow_no_proxy: p.allow_no_proxy,
+            disconnect_on_ip_change: p.disconnect_on_ip_change,
             blocklists: p.blocklists,
                 notes: p.notes,
                 status: p.status,
@@ -1498,6 +1506,7 @@ pub async fn profiles(
                 }),
                 permissions: all_permissions(),
                 allow_no_proxy: p.allow_no_proxy,
+            disconnect_on_ip_change: p.disconnect_on_ip_change,
             blocklists: p.blocklists,
                 notes: p.notes,
                 status: p.status,
@@ -1539,6 +1548,7 @@ pub async fn profiles(
             // launch spec without a proxy, because that one opens on a
             // colleague's machine.
             allow_no_proxy: false,
+            disconnect_on_ip_change: false,
             id: p.id.to_string(),
             project_id: Some(p.project_id.to_string()),
             project_name: Some(p.project_name),
@@ -3073,6 +3083,7 @@ pub async fn trash(state: State<'_, AppState>) -> R<Vec<UiProfile>> {
         .enumerate()
         .map(|(i, p)| UiProfile {
             allow_no_proxy: p.allow_no_proxy,
+            disconnect_on_ip_change: p.disconnect_on_ip_change,
             proxy: p.proxy.map(|x| UiProxy {
                 display: format!("{}:{}", x.host, x.port),
                 country: x.last_country,
@@ -4355,6 +4366,7 @@ pub async fn shared_with_me(state: State<'_, AppState>) -> R<Vec<UiProfile>> {
             // Somebody else's profile, held on the server. Same reason as the
             // listing above.
             allow_no_proxy: false,
+            disconnect_on_ip_change: false,
             id: r.id,
             // Not in any project of this account's: it is in the OWNER's
             // project, which this account cannot see and has no business
@@ -4733,6 +4745,7 @@ mod upload_tests {
             project_id: None,
             project_name: None,
             allow_no_proxy: false,
+            disconnect_on_ip_change: false,
             name: "RU".into(),
             notes: String::new(),
             status: String::new(),
