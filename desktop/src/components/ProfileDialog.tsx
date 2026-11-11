@@ -245,6 +245,11 @@ export function ProfileDialog({
   /** Permission for THIS profile to open with none. Off unless it was already
    *  on: the refusal is the default and stays the default. */
   const [allowNoProxy, setAllowNoProxy] = useState(editing?.allow_no_proxy ?? false);
+  /** Close the browser if the exit IP moves while this profile is open. Only
+   *  meaningful with a proxy — with none the exit is this machine and there is
+   *  nothing to watch — so the save forces it off when there is no proxy, the
+   *  same way a stale allowNoProxy is forced off when there is one. */
+  const [watchExit, setWatchExit] = useState(editing?.disconnect_on_ip_change ?? false);
   // Empty means "follow the proxy's exit", which is what the agent resolves at
   // launch. Pre-filling Europe/Berlin made every profile ever created claim
   // Berlin — including the ones going out through São Paulo — and made the
@@ -385,6 +390,10 @@ export function ProfileDialog({
         // permission on a profile that was later given one would be a switch
         // nobody can see, waiting for the day the proxy is removed again.
         allow_no_proxy: !useProxyId && allowNoProxy,
+        // Watching the exit needs an exit: with no proxy there is nothing to
+        // watch, so a tick left on a profile whose proxy was removed is
+        // cleared rather than carried invisibly.
+        disconnect_on_ip_change: hasProxy && watchExit,
         blocklists,
         last_opened_at: null,
       },
@@ -436,6 +445,27 @@ export function ProfileDialog({
       </p>
     </div>
   );
+
+  // Watching the exit is only meaningful for a profile that has one: with no
+  // proxy the exit is this machine and there is nothing to guard. Offered in
+  // both proxy modes for the same reason as noProxyChoice above — it belongs
+  // beside the proxy, wherever that is being set.
+  const watchExitChoice = hasProxy ? (
+    <div style={{ marginTop: "var(--s-1)" }}>
+      <label className="row" style={{ alignItems: "flex-start" }}>
+        <input
+          type="checkbox"
+          style={{ width: 14, height: 14, accentColor: "var(--accent)", marginTop: 3 }}
+          checked={watchExit}
+          onChange={(e) => setWatchExit(e.target.checked)}
+        />
+        <span>{t("pd.watchExit")}</span>
+      </label>
+      <p className={watchExit ? "hint warn" : "hint"}>
+        {watchExit ? t("pd.watchExitOn") : t("pd.watchExitOff")}
+      </p>
+    </div>
+  ) : null;
 
   const pxUrl = () => proxyUrl(pxKind, pxHost, pxPort, pxUser, pxWg ? pxConf : pxPass);
 
@@ -653,6 +683,7 @@ export function ProfileDialog({
                       </Select>
                       {!proxyId && !needsProxy && noProxyChoice}
                       {!proxyId && needsProxy && <p className="hint">{t("pd.proxyRequired")}</p>}
+                      {watchExitChoice}
                     </div>
                   </div>
                 ) : (
@@ -725,6 +756,7 @@ export function ProfileDialog({
                           <p className="hint">{t("pd.proxyRequired")}</p>
                         )}
                         {!needsProxy && !pxComplete && noProxyChoice}
+                        {watchExitChoice}
                         {pxCheck && (
                           <div
                             className={pxCheck.ok ? "verdict good" : "verdict bad"}

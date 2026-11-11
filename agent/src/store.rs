@@ -188,6 +188,24 @@ pub struct Profile {
     /// "this machine" would be theirs.
     #[serde(default)]
     pub allow_no_proxy: bool,
+    /// Watch the exit IP while this profile is open, and close the browser if
+    /// it changes.
+    ///
+    /// Off for every profile that does not say otherwise. A mobile or rotating
+    /// residential proxy is *meant* to hand out a new address from time to time,
+    /// and for those this stays off; but a profile parked on a warmed account
+    /// is only safe while every request leaves from the address the account was
+    /// aged on. The relay already fails closed when the upstream dies — it
+    /// never falls back to a direct connection — but it cannot see an upstream
+    /// that stays up and silently starts answering from somewhere else. This
+    /// polls the exit through the profile's own relay and, on a change, closes
+    /// the browser the same way `stop` does: gracefully, so the cookie jar is
+    /// written, rather than leaving a live browser on a foreign address.
+    ///
+    /// A per-profile flag, like `allow_no_proxy`, because it is a property of
+    /// the work and not of the machine.
+    #[serde(default)]
+    pub disconnect_on_ip_change: bool,
     #[serde(default)]
     pub proxy: Option<Proxy>,
     /// What a caller WRITING a profile supplies: which proxy, and nothing else.
@@ -384,6 +402,12 @@ impl Store {
             // column keeps the old refusal, and nothing changes for anybody
             // who does not go and tick it.
             "ALTER TABLE profiles ADD COLUMN allow_no_proxy INTEGER NOT NULL DEFAULT 0",
+            // Close the browser if the exit IP changes while it is open, per
+            // profile. Default 0 for the same reason as allow_no_proxy: every
+            // profile that predates the column keeps behaving as it did, and a
+            // rotating proxy — which changes its address on purpose — must not
+            // start getting closed out from under itself.
+            "ALTER TABLE profiles ADD COLUMN disconnect_on_ip_change INTEGER NOT NULL DEFAULT 0",
             // Machine fields set by hand, as one JSON object. '{}' is "as the
             // persona has it", which is every profile made before this.
             "ALTER TABLE profiles ADD COLUMN overrides TEXT NOT NULL DEFAULT '{}'",
@@ -803,6 +827,7 @@ impl Store {
         let rows = sqlx::query(
             "SELECT f.id, f.project_id, f.name, f.notes, f.tags, f.blocklists, f.status, f.persona_id, f.fp_seed,
                     f.timezone, f.languages, f.overrides, f.start_urls, f.allow_no_proxy, f.last_opened_at,
+                    f.disconnect_on_ip_change,
                     p.name AS project_name,
                     x.id AS px_id, x.name AS px_name, x.kind AS px_kind, x.host AS px_host,
                     x.port AS px_port, x.username AS px_user, x.password AS px_pass,
@@ -861,6 +886,7 @@ impl Store {
         let row = sqlx::query(
             "SELECT f.id, f.project_id, f.name, f.notes, f.tags, f.blocklists, f.status, f.persona_id, f.fp_seed,
                     f.timezone, f.languages, f.overrides, f.start_urls, f.allow_no_proxy, f.last_opened_at,
+                    f.disconnect_on_ip_change,
                     p.name AS project_name,
                     x.id AS px_id, x.name AS px_name, x.kind AS px_kind, x.host AS px_host,
                     x.port AS px_port, x.username AS px_user, x.password AS px_pass,
@@ -895,8 +921,9 @@ impl Store {
         sqlx::query(
             "INSERT INTO profiles
                 (id, project_id, name, notes, tags, blocklists, persona_id, fp_seed, proxy_id,
-                 timezone, languages, start_urls, created_at, status, allow_no_proxy, overrides)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 timezone, languages, start_urls, created_at, status, allow_no_proxy, overrides,
+                 disconnect_on_ip_change)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(id) DO UPDATE SET
                 project_id = excluded.project_id, name = excluded.name,
                 notes = excluded.notes, tags = excluded.tags,
@@ -905,6 +932,7 @@ impl Store {
                 timezone = excluded.timezone, languages = excluded.languages,
                 start_urls = excluded.start_urls, allow_no_proxy = excluded.allow_no_proxy,
                 overrides = excluded.overrides,
+                disconnect_on_ip_change = excluded.disconnect_on_ip_change,
                 deleted_at = NULL",
         )
         .bind(&id)
@@ -928,6 +956,7 @@ impl Store {
         .bind(p.status.trim())
         .bind(p.allow_no_proxy)
         .bind(serde_json::to_string(&p.overrides)?)
+        .bind(p.disconnect_on_ip_change)
         .execute(&self.pool)
         .await?;
         Ok(id)
@@ -979,6 +1008,7 @@ impl Store {
         let rows = sqlx::query(
             "SELECT f.id, f.project_id, f.name, f.notes, f.tags, f.blocklists, f.status, f.persona_id, f.fp_seed,
                     f.timezone, f.languages, f.overrides, f.start_urls, f.allow_no_proxy, f.deleted_at AS last_opened_at,
+                    f.disconnect_on_ip_change,
                     x.id AS px_id, x.name AS px_name, x.kind AS px_kind, x.host AS px_host,
                     x.port AS px_port, x.username AS px_user, x.password AS px_pass,
                     x.last_country AS px_country, x.last_ip AS px_ip,
@@ -1070,6 +1100,11 @@ fn row_to_profile(r: sqlx::sqlite::SqliteRow) -> Profile {
         // try_get, like the columns above it: a database written before this
         // one existed answers "no", which is the safe answer and the old one.
         allow_no_proxy: r.try_get::<bool, _>("allow_no_proxy").unwrap_or(false),
+        // Same defence: a pre-column database answers "off", which is the old
+        // behaviour — a profile nobody asked to watch keeps not being watched.
+        disconnect_on_ip_change: r
+            .try_get::<bool, _>("disconnect_on_ip_change")
+            .unwrap_or(false),
         persona_id: r.get("persona_id"),
         fp_seed: r.get("fp_seed"),
         timezone: r.get("timezone"),
@@ -1169,6 +1204,7 @@ mod credential_tests {
                 project_id: None,
                 project_name: None,
                 allow_no_proxy: false,
+                disconnect_on_ip_change: false,
                 name: "acct".into(),
                 notes: String::new(),
                 status: String::new(),
@@ -1333,6 +1369,7 @@ mod tests {
             project_id: Some(project.into()),
             project_name: None,
             allow_no_proxy: false,
+            disconnect_on_ip_change: false,
             name: name.into(),
             notes: String::new(),
             status: String::new(),

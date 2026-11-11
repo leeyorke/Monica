@@ -218,6 +218,13 @@ struct Running {
     /// forwarded to the customer's upstream, so a day of opening and closing
     /// profiles left a machine full of live exits nothing was using.
     relay: tokio::task::JoinHandle<()>,
+    /// Watches the exit IP while the browser runs, for a profile that asked for
+    /// it (`disconnect_on_ip_change`). Re-resolves the exit through this
+    /// profile's own relay every so often and closes the browser if the address
+    /// moved. `None` for a profile that did not ask — the common case, and a
+    /// rotating proxy must not be closed out from under itself. Aborted on
+    /// stop, like `relay` and `heartbeat`, for the same leaked-task reason.
+    ip_watch: Option<tokio::task::JoinHandle<()>>,
 }
 
 /// The backstop for an entry that leaves the map by any road but `stop`.
@@ -237,6 +244,9 @@ impl Drop for Running {
             beat.abort();
         }
         self.relay.abort();
+        if let Some(watch) = self.ip_watch.take() {
+            watch.abort();
+        }
     }
 }
 
@@ -279,6 +289,15 @@ pub struct ExitFacts {
     /// stores it and whatever reads it cannot disagree about rounding.
     pub location: Option<String>,
 }
+
+/// How often a watching profile re-resolves its exit IP, and the `sleep` in the
+/// watch task below. A constant rather than a setting: the interval trades
+/// detection latency against traffic to the checker through the exit, and the
+/// right answer for a warmed account is "notice within a minute" rather than
+/// "notice instantly" — a poll every few seconds is traffic the exit's owner
+/// can see and a checker rate limit for a threat that moves on the scale of a
+/// provider rotation, not a heartbeat.
+const EXIT_WATCH_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
 
 /// Split "lat,lng" into a pair, or nothing.
 ///
@@ -1506,6 +1525,10 @@ impl Agent {
                         }))
                     }
                 };
+                // The field names below are ipinfo's. An ipwho.is checker (or a
+                // mirror of one) spells them differently, so fold it into the
+                // ipinfo shape first -- see geoip::normalise_checker_body.
+                let body = crate::geoip::normalise_checker_body(body);
 
                 // Remembered, so a profile that follows its exit does not pay
                 // for this round trip again at launch. With a local database
@@ -2785,6 +2808,9 @@ impl Agent {
         };
 
         let body: serde_json::Value = client.get(&endpoint).send().await?.json().await?;
+        // Same reason as `proxies.check`: the readers below use ipinfo's field
+        // names, so an ipwho.is answer is folded into that shape first.
+        let body = crate::geoip::normalise_checker_body(body);
         let s = |k: &str| body.get(k).and_then(|v| v.as_str()).map(str::to_string);
         // `loc` is "lat,lng" and was being thrown away. It comes from the same
         // request as the timezone and describes the same place, which is exactly
@@ -3037,9 +3063,18 @@ impl Agent {
         // for two questions with one answer is waste.
         let want_timezone = profile.timezone.is_none();
         let want_languages = profile.languages.is_none();
+        // A profile watching its exit needs the launch-time address to compare
+        // against, whatever it pinned: the whole point is "was it the address I
+        // opened on". Without this a fully-pinned profile would never resolve
+        // and the watch would have no baseline to guard.
+        let watch_exit = profile.disconnect_on_ip_change && proxy.is_some();
         let mut exit_country = proxy.and_then(|p| p.last_country.clone());
         let mut exit_timezone = proxy.and_then(|p| p.last_timezone.clone());
         let mut exit_location = proxy.and_then(|p| p.last_location.clone());
+        // The address this launch opened on, when it could be seen. Left None
+        // when it could not — a watch with no baseline has nothing to guard, so
+        // none is started rather than one that fires on its first poll.
+        let mut launch_ip = proxy.and_then(|p| p.last_ip.clone());
 
         // The position joins the same lookup: one round trip answers where the
         // exit is, what time it is there and what language it speaks, and asking
@@ -3047,6 +3082,7 @@ impl Agent {
         if (want_timezone && exit_timezone.is_none())
             || (want_languages && exit_country.is_none())
             || exit_location.is_none()
+            || (watch_exit && exit_country.is_none() && exit_timezone.is_none() && exit_location.is_none())
         {
             // With no proxy the question is still worth asking, and the answer
             // is this machine. A profile that follows its exit and then claims
@@ -3085,6 +3121,7 @@ impl Agent {
                     exit_country = facts.country.or(exit_country);
                     exit_timezone = facts.timezone.or(exit_timezone);
                     exit_location = facts.location.or(exit_location);
+                    launch_ip = facts.ip.or(launch_ip);
                 }
                 Err(e) => {
                     tracing::warn!(error = format!("{e:#}"), exit_ms, "could not resolve the proxy exit");
@@ -3394,8 +3431,58 @@ impl Agent {
                 key_generation,
                 lock_token,
                 heartbeat,
+                ip_watch: None,
             },
         );
+
+        // Watch the exit for a profile that asked for it. The address it opened
+        // on is the baseline; a poll that sees a different one closes the
+        // browser, because the account is only safe while every request leaves
+        // from the address it was aged on.
+        //
+        // Owns its own upstream and its own relay dial rather than sharing the
+        // browser's: the question travels through the same exit, so the checker
+        // sees the exit's address and never this machine's, which is the only
+        // thing that makes asking a third party acceptable (docs/05).
+        if watch_exit {
+            if let Some(baseline) = launch_ip.clone() {
+                let me = self.me.get().and_then(|w| w.upgrade());
+                if let Some(agent) = me {
+                    let watch_profile = profile.id.clone();
+                    let watch_upstream = exit_upstream.clone();
+                    let checker = proxy
+                        .and_then(|p| p.checker_url.clone())
+                        .filter(|c| !c.trim().is_empty());
+                    let handle = tokio::spawn(async move {
+                        loop {
+                            tokio::time::sleep(EXIT_WATCH_INTERVAL).await;
+                            let resolved = Agent::resolve_exit(watch_upstream.clone(), checker.as_deref()).await;
+                            let Ok(facts) = resolved else {
+                                // A check that fails is not an address that
+                                // moved. The relay already fails the browser
+                                // closed when the upstream dies; this only
+                                // acts on a definite answer from a different
+                                // address.
+                                continue;
+                            };
+                            if facts.ip.as_deref() != Some(baseline.as_str()) {
+                                tracing::warn!(
+                                    profile = %watch_profile,
+                                    opened_on = %baseline,
+                                    now_on = ?facts.ip,
+                                    "the exit IP changed under an open profile — closing it"
+                                );
+                                let _ = agent.stop(&watch_profile).await;
+                                return;
+                            }
+                        }
+                    });
+                    if let Some(entry) = self.running.lock().await.get_mut(&profile.id) {
+                        entry.ip_watch = Some(handle);
+                    }
+                }
+            }
+        }
 
         // Written only once the browser is actually up: a marker recorded for a
         // launch that failed would refuse the next, correct one.
@@ -3908,6 +3995,7 @@ mod exit_check_tests {
                 ws_endpoint: None,
                 background: false,
                 relay: tokio::spawn(async {}),
+                ip_watch: None,
             },
         );
         let flag = || agent.exit_when_idle.load(std::sync::atomic::Ordering::SeqCst);

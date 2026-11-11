@@ -124,6 +124,27 @@ export function Settings({
                   ))}
                 </select>
               </div>
+
+              <div className="settingsGroup">
+                <h2>{t("set.window")}</h2>
+                {/* Closing hides to the tray rather than quitting, so the agent
+                    keeps the open profiles' locks and relays while the window is
+                    out of the way. Read by the Rust close handler on the way
+                    out, not once at startup, so this takes effect on the next
+                    close without a restart. */}
+                <label className="row" style={{ gap: 8, margin: "var(--s-3) 0" }}>
+                  <input
+                    type="checkbox"
+                    style={{ width: 14, height: 14, accentColor: "var(--accent)" }}
+                    checked={shell.minimize_to_tray}
+                    onChange={async (e) =>
+                      onChanged(await api.setMinimizeToTray(e.target.checked))
+                    }
+                  />
+                  <span>{t("set.minimizeToTray")}</span>
+                </label>
+                <p className="hint">{t("set.minimizeToTrayHint")}</p>
+              </div>
             </>
           )}
 

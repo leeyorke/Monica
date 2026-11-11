@@ -343,6 +343,17 @@ pub struct Shell {
     /// one anyway. They typed it, it was right, and they arrived back at the
     /// same box. Reported from the machine somebody was trying to join on.
     pub awaiting_key: bool,
+    /// Whether the organisation key is remembered between launches. Shown as a
+    /// checkbox in Settings, so it has to come back on the shell state rather
+    /// than only living in the `set_remember_org_key` command: the toggle reads
+    /// its current value from here, and without it the box always rendered
+    /// unchecked no matter what was actually set.
+    pub remember_org_key: bool,
+    /// Whether closing the window hides it to the tray rather than quitting.
+    /// Read by the window-close handler in main.rs; shown as a checkbox in
+    /// Settings, so it has to come back on the shell state the same way the
+    /// rest of the preferences do.
+    pub minimize_to_tray: bool,
 }
 
 /// Does this action go to the local store, or to the server?
@@ -429,16 +440,23 @@ pub async fn shell_state(state: State<'_, AppState>) -> Result<Shell, ApiErr> {
         (true, None)
     };
 
-    // Both settings fields in one lock, released before the struct is built.
+    // Every settings field the shell state needs, in one lock, released before
+    // the struct is built.
     //
     // Two `settings.lock()` calls inside a single struct literal deadlocked:
     // the temporaries a struct literal creates live until the end of the whole
     // expression, so the first guard was still held when the second asked for
     // the same non-reentrant mutex. The application started, drew its window,
     // and never left the splash — the first call it makes never returned.
-    let (server_url, last_email, last_server) = {
+    let (server_url, last_email, last_server, minimize_to_tray, remember_org_key) = {
         let s = state.settings.lock().unwrap();
-        (s.server_url.clone(), s.last_email.clone(), s.last_server.clone())
+        (
+            s.server_url.clone(),
+            s.last_email.clone(),
+            s.last_server.clone(),
+            s.minimize_to_tray,
+            s.remember_org_key,
+        )
     };
     let org_key_ready = state.org_key().is_some();
 
@@ -468,6 +486,8 @@ pub async fn shell_state(state: State<'_, AppState>) -> Result<Shell, ApiErr> {
         last_email,
         last_server,
         awaiting_key,
+        remember_org_key,
+        minimize_to_tray,
     })
 }
 
@@ -1214,6 +1234,11 @@ pub struct UiProxy {
     /// hide it from and the operator has to be able to check what they typed.
     pub display: String,
     pub country: Option<String>,
+    /// The exit IP itself, from the last check — shown beside the country so
+    /// "134.195.101.171 · US" reads as one place, not just a flag.
+    /// Local only: a server row carries no IP the viewer may see.
+    #[serde(default)]
+    pub exit_ip: Option<String>,
     /// From the last exit check, when there was one.
     #[serde(default)]
     pub last_timezone: Option<String>,
@@ -1355,6 +1380,7 @@ async fn local_profiles() -> R<Vec<UiProfile>> {
             proxy: p.proxy.map(|x| UiProxy {
                 display: format!("{}:{}", x.host, x.port),
                 country: x.last_country,
+                exit_ip: x.last_ip,
                 last_timezone: x.last_timezone,
                 id: x.id,
                 name: x.name,
@@ -1523,6 +1549,7 @@ pub async fn profiles(
                 kind: x.kind,
                 display: x.display,
                 country: x.country,
+                exit_ip: None,
                 last_timezone: None,
             }),
             permissions: p.permissions.iter().map(|v| perm_name(v)).collect(),
@@ -1892,6 +1919,21 @@ pub async fn set_remember_org_key(state: State<'_, AppState>, remember: bool) ->
         state.session.forget_org_key();
     } else if let Some(key) = *state.org_key.lock().unwrap() {
         state.session.store_org_key(&key);
+    }
+    shell_state(state).await
+}
+
+/// Whether closing the window hides it to the tray rather than quitting. Read
+/// by the window-close handler in main.rs, which is why it lives in Settings
+/// rather than only in the interface: the decision is made in Rust on the way
+/// out, after the webview has stopped mattering.
+#[tauri::command]
+pub async fn set_minimize_to_tray(state: State<'_, AppState>, minimize: bool) -> R<Shell> {
+    {
+        let mut s = state.settings.lock().unwrap();
+        s.minimize_to_tray = minimize;
+        s.save(&state.config_dir)
+            .map_err(|e| ApiErr::local(format!("Could not save settings: {e}")))?;
     }
     shell_state(state).await
 }
@@ -3009,6 +3051,7 @@ pub async fn trash(state: State<'_, AppState>) -> R<Vec<UiProfile>> {
             proxy: p.proxy.map(|x| UiProxy {
                 display: format!("{}:{}", x.host, x.port),
                 country: x.last_country,
+                exit_ip: x.last_ip,
                 last_timezone: None,
                 id: x.id,
                 name: x.name,
@@ -4304,6 +4347,7 @@ pub async fn shared_with_me(state: State<'_, AppState>) -> R<Vec<UiProfile>> {
                 kind: String::new(),
                 display,
                 country: None,
+                exit_ip: None,
                 last_timezone: None,
             }),
             timezone: None,

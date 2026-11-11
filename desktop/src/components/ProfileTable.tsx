@@ -305,6 +305,11 @@ export function ProfileTable({
                     <div className="muted small">
                       {p.proxy.country ? (
                         <>
+                          {/* The exit IP itself, when the last check saw one:
+                              "134.195.101.171 · US" reads as one place rather
+                              than a bare flag. Local only — a server row
+                              carries no IP the viewer may see. */}
+                          {p.proxy.exit_ip && `${p.proxy.exit_ip} · `}
                           <span className="flag">{flag(p.proxy.country)}</span> {p.proxy.country}
                         </>
                       ) : (

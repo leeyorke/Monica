@@ -93,6 +93,20 @@ pub struct Settings {
     /// tool somebody opens ten times a day.
     #[serde(default = "yes")]
     pub remember_org_key: bool,
+
+    /// Whether closing the window hides it to the tray instead of quitting.
+    ///
+    /// Off by default: quitting when the window closes is what everybody
+    /// expects. On, the close button hides the shell while the agent it
+    /// started keeps the open profiles' locks and relays alive — the same
+    /// reason the agent outlives the window today (see main.rs,
+    /// `RunEvent::Exit`), just without a taskbar button for somebody who
+    /// wants it gone. The tray icon itself is always built (main.rs, setup):
+    /// it is the way back in once the window is hidden, and its Quit is the
+    /// one road to `RunEvent::Exit` and so to the agent shutdown. This
+    /// setting only decides what the window's close button does.
+    #[serde(default)]
+    pub minimize_to_tray: bool,
 }
 
 fn yes() -> bool {
@@ -126,6 +140,7 @@ impl Settings {
                 ork_generation: 0,
                 ork_generations: Default::default(),
                 remember_org_key: true,
+                minimize_to_tray: false,
                 server_url: None,
                 machine_id: new_machine_id(),
             },

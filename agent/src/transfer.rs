@@ -338,6 +338,7 @@ mod tests {
             project_id: Some(project.into()),
             project_name: None,
             allow_no_proxy: false,
+            disconnect_on_ip_change: false,
             name: name.into(),
             notes: String::new(),
             status: String::new(),

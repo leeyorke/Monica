@@ -318,6 +318,9 @@ async fn fetch_exit(upstream: crate::relay::Upstream, endpoint: &str) -> anyhow:
     // the step on the tunnel the steps above used (`wg_stack::Shared`).
     let via = crate::relay::via(upstream, Duration::from_secs(15)).await?;
     let body: serde_json::Value = via.client().get(&endpoint).send().await?.json().await?;
+    // Same fold as the check and the launch: the readers below use ipinfo's
+    // field names, so an ipwho.is answer is rewritten into that shape first.
+    let body = crate::geoip::normalise_checker_body(body);
     let s = |k: &str| body.get(k).and_then(|v| v.as_str()).map(str::to_string);
     // Same overlay as the check: a pasted database path resolves geo here
     // too rather than only where the button is.

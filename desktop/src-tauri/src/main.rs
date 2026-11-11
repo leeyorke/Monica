@@ -24,11 +24,24 @@ mod update;
 use std::sync::Mutex;
 use std::time::Duration;
 
-use tauri::Manager;
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::{TrayIconBuilder, TrayIconEvent};
+use tauri::{Manager, RunEvent, WindowEvent};
 
 use commands::AppState;
 use session::Session;
 use settings::Settings;
+
+/// Brings the main window back from the tray: unminimise, show, focus — the
+/// same three calls the single-instance handler makes when a second launch is
+/// folded into this one.
+fn show_main(app: &tauri::AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.unminimize();
+        let _ = w.show();
+        let _ = w.set_focus();
+    }
+}
 
 fn main() {
     tauri::Builder::default()
@@ -101,6 +114,36 @@ fn main() {
                 locks: Default::default(),
                 org_key: Default::default(),
             });
+
+            // A tray icon: the way back in once the window has been hidden to
+            // the tray, and a Quit that reaches `RunEvent::Exit` (and so the
+            // agent shutdown) cleanly. Built unconditionally rather than only
+            // when minimize_to_tray is on, because that setting can be flipped
+            // on mid-session — a window hidden before the icon existed would
+            // otherwise have no way back. Labels are English: the tray is
+            // native, outside the React i18n, and the chosen language is not
+            // readable here without a locale dependency this does not need.
+            let show = MenuItem::with_id(app, "show", "Show", true, None::<&str>)?;
+            let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+            let tray_menu = Menu::with_items(app, &[&show, &quit])?;
+            let mut tray = TrayIconBuilder::with_id("fury-tray")
+                .icon(app.default_window_icon().expect("window icon").clone())
+                .menu(&tray_menu)
+                .show_menu_on_left_click(false)
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "show" => show_main(app),
+                    "quit" => app.exit(0),
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    // Left click (no menu) restores the window — the usual tray
+                    // convention.
+                    if let TrayIconEvent::Click { .. } = event {
+                        show_main(tray.app_handle());
+                    }
+                })
+                .build(app)?;
+            tray.set_tooltip(Some("Monica"))?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -159,6 +202,7 @@ fn main() {
             assistants::assistants_install_skill,
             update::open_url,
             commands::set_remember_org_key,
+            commands::set_minimize_to_tray,
             commands::audit,
             commands::org_members,
             commands::invite,
@@ -250,7 +294,7 @@ fn main() {
         ])
         .build(tauri::generate_context!())
         .expect("error while running Fury")
-        .run(|_app, event| {
+        .run(|app, event| {
             // The agent this shell started outlives it on purpose: open
             // profiles keep their locks and relays. With nothing open it had
             // no reason to, and on macOS a live child kept Fury in the Dock
@@ -267,24 +311,46 @@ fn main() {
             // and a worker stuck in a task means none may: the 0.4.17 update
             // hung here for good (see update.rs, request_restart). Whatever
             // happens to the call, the exit goes on after 1.5 s.
-            if let tauri::RunEvent::Exit = event {
-                let (done, wait) = std::sync::mpsc::channel();
-                std::thread::spawn(move || {
-                    if let Ok(rt) = tokio::runtime::Builder::new_current_thread().enable_all().build() {
-                        rt.block_on(async {
-                            let _ = tokio::time::timeout(
-                                Duration::from_millis(1500),
-                                agent::call::<serde_json::Value>(
-                                    "agent.shutdown",
-                                    serde_json::json!({ "when_idle": true }),
-                                ),
-                            )
-                            .await;
-                        });
+            match event {
+                // Intercept the close so minimize-to-tray can hide the window
+                // instead of letting it quit. The agent keeps running either
+                // way; hiding leaves the shell reachable from the tray while
+                // open profiles stay up. The setting is read here, on every
+                // close, rather than once at startup, so flipping it in
+                // Settings takes effect on the very next close.
+                RunEvent::WindowEvent {
+                    label,
+                    event: WindowEvent::CloseRequested { api, .. },
+                    ..
+                } if label == "main" => {
+                    let minimize = app.state::<AppState>().settings.lock().unwrap().minimize_to_tray;
+                    if minimize {
+                        api.prevent_close();
+                        if let Some(w) = app.get_webview_window("main") {
+                            let _ = w.hide();
+                        }
                     }
-                    let _ = done.send(());
-                });
-                let _ = wait.recv_timeout(Duration::from_millis(1600));
+                }
+                RunEvent::Exit => {
+                    let (done, wait) = std::sync::mpsc::channel();
+                    std::thread::spawn(move || {
+                        if let Ok(rt) = tokio::runtime::Builder::new_current_thread().enable_all().build() {
+                            rt.block_on(async {
+                                let _ = tokio::time::timeout(
+                                    Duration::from_millis(1500),
+                                    agent::call::<serde_json::Value>(
+                                        "agent.shutdown",
+                                        serde_json::json!({ "when_idle": true }),
+                                    ),
+                                )
+                                .await;
+                            });
+                        }
+                        let _ = done.send(());
+                    });
+                    let _ = wait.recv_timeout(Duration::from_millis(1600));
+                }
+                _ => {}
             }
         });
 }

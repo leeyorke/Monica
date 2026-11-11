@@ -42,6 +42,9 @@ export interface ProxySummary {
    *  Never masked in local mode — there is nobody to hide it from. */
   display: string;
   country: string | null;
+  /** The exit IP itself from the last check. Local only — a server row carries
+   *  no IP the viewer may see, and the cell falls back to the country alone. */
+  exit_ip?: string | null;
   /** The exit's zone from the last check, if any — what "follow the exit" resolves to. */
   last_timezone?: string | null;
 }
@@ -120,6 +123,10 @@ export interface Profile {
    *  for, and never true for a team profile — that one opens on somebody
    *  else's machine, where "this machine" would be theirs. */
   allow_no_proxy?: boolean;
+  /** Close the browser if the exit IP changes while it is open. Off everywhere
+   *  it was not asked for, and only meaningful for a profile that has a proxy —
+   *  a rotating one is meant to change its address, so it stays off there. */
+  disconnect_on_ip_change?: boolean;
   /** Null means "follow the proxy's exit", resolved at launch. */
   timezone: string | null;
   languages: string[] | null;
@@ -605,6 +612,10 @@ export interface Shell {
    *  fixes one of those and cannot fix the other. False against a server too
    *  old to answer the question. */
   awaiting_key: boolean;
+  /** Whether closing the window hides it to the tray rather than quitting.
+   *  Off by default; on, the shell stays out of the way while open profiles
+   *  keep their locks and relays, and the tray's Quit is the real exit. */
+  minimize_to_tray: boolean;
 }
 
 /** Note what is absent: the lock token. It authorises overwriting a bundle,
@@ -785,6 +796,8 @@ export const api = {
       last_email: null,
       last_server: null,
       awaiting_key: false,
+      // Not a real window in this mode, so there is nothing to hide to a tray.
+      minimize_to_tray: false,
       // Vite proxies /v1, so in this mode the address is fixed by the dev
       // config rather than chosen by the operator.
       server_url: "http://127.0.0.1:8901 (vite proxy)",
@@ -979,6 +992,8 @@ export const api = {
 
   setRememberOrgKey: (remember: boolean): Promise<Shell> =>
     cmd<Shell>("set_remember_org_key", { remember }),
+  setMinimizeToTray: (minimize: boolean): Promise<Shell> =>
+    cmd<Shell>("set_minimize_to_tray", { minimize }),
 
   invite: (email: string, role: string): Promise<{ code: string; expires_in_hours: number }> =>
     cmd("invite", { email, role }),

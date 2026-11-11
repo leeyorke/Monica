@@ -538,6 +538,9 @@ const en = {
   "app.retry": "Try again",
   "set.rememberKey": "Stay unlocked between launches",
   "set.rememberKeyHint": "The key that opens this team's data is kept in this machine's keychain, beside the session token that is already there. Turn it off to be asked for your password every time the app starts — worth it on a shared machine, and a poor default on your own.",
+  "set.window": "Window",
+  "set.minimizeToTray": "Close to the tray",
+  "set.minimizeToTrayHint": "Closing the window hides it instead of quitting, so open profiles keep running in the background. Quit for real from the tray icon's menu.",
   "host.show": "How to run a server of your own",
   "host.hide": "Hide",
   "host.intro": "Any small VPS will do — 2 cores and 4 GB is enough for a team. The installer sets up Postgres, the server, a firewall and a certificate that renews itself.",
@@ -678,6 +681,10 @@ const en = {
   "pd.allowNoProxy": "Let this profile open without a proxy",
   "pd.allowNoProxyOn":
     "Every site this profile visits will see this machine's own address, and so will anything else it talks to. Fine for reading documentation or testing a fingerprint; not for an account you care about. It applies to this profile alone.",
+  "pd.watchExit": "Close this profile if its exit IP changes",
+  "pd.watchExitOn":
+    "While the profile is open its exit address is re-checked every minute through the profile's own proxy, and the browser closes if it has moved. An account is only safe while every request leaves from the address it was aged on. A rotating or mobile proxy changes its address on purpose — leave this off for one.",
+  "pd.watchExitOff": "Needs a proxy to watch.",
   "pd.exit": "Exit",
   "pd.machine": "Machine",
   "pd.machineHint":
@@ -1849,6 +1856,9 @@ const ru: Record<Key, string> = {
   "app.retry": "Ещё раз",
   "set.rememberKey": "Оставаться разблокированным между запусками",
   "set.rememberKeyHint": "Ключ, которым открываются данные команды, хранится в связке ключей этой машины — рядом с токеном сессии, который там и так лежит. Выключите, чтобы пароль спрашивали при каждом запуске: это разумно на общей машине и плохо как значение по умолчанию на своей.",
+  "set.window": "Окно",
+  "set.minimizeToTray": "Закрывать в область уведомлений",
+  "set.minimizeToTrayHint": "Закрытие окна скрывает его, а не завершает работу: открытые профили продолжают работать в фоне. Завершить работу по-настоящему можно из меню значка в области уведомлений.",
   "host.show": "Как поднять свой сервер",
   "host.hide": "Скрыть",
   "host.intro": "Подойдёт любой небольшой VPS — 2 ядра и 4 ГБ хватит на команду. Установщик поставит Postgres, сервер, файрвол и сертификат, который продлевается сам.",
@@ -1985,6 +1995,10 @@ const ru: Record<Key, string> = {
   "pd.allowNoProxy": "Разрешить этому профилю открываться без прокси",
   "pd.allowNoProxyOn":
     "Каждый сайт, куда зайдёт этот профиль, увидит адрес этой машины — и не только сайт. Годится, чтобы почитать документацию или проверить отпечаток; не годится для аккаунта, который жалко. Разрешение действует только на этот профиль.",
+  "pd.watchExit": "Закрывать этот профиль при смене его выходного IP",
+  "pd.watchExitOn":
+    "Пока профиль открыт, его выходной адрес проверяется через собственный прокси профиля раз в минуту, и браузер закрывается, если адрес изменился. Аккаунт в безопасности, только пока каждый запрос уходит с того адреса, на котором он обрастал историей. Ротационный или мобильный прокси меняет адрес намеренно — для него это оставьте выключенным.",
+  "pd.watchExitOff": "Нужен прокси, чтобы следить за выходом.",
   "pd.exit": "Выход",
   "pd.machine": "Машина",
   "pd.machineHint":
@@ -3111,6 +3125,9 @@ const zh: Record<Key, string> = {
   "app.retry": "重试",
   "set.rememberKey": "启动之间保持解锁",
   "set.rememberKeyHint": "解密团队数据的密钥保存在本机钥匙串中，与已有的会话令牌放在一起。关闭后，每次启动应用都会要求输入密码——在共用电脑上值得这么做，但在自己的电脑上就没必要了。",
+  "set.window": "窗口",
+  "set.minimizeToTray": "关闭时最小化到托盘",
+  "set.minimizeToTrayHint": "关闭窗口时将其隐藏而非退出，已打开的环境会在后台继续运行。要真正退出，请使用托盘图标菜单中的退出。",
   "host.show": "如何自建服务器",
   "host.hide": "隐藏",
   "host.intro": "任何小型 VPS 都可以——2 核 4 GB 足够一个团队使用。安装程序会配置 Postgres、服务器、防火墙以及可自动续期的证书。",
@@ -3243,6 +3260,10 @@ const zh: Record<Key, string> = {
   "pd.proxyRequired": "没有代理的环境无法打开——浏览器的所有流量都经由代理。",
   "pd.allowNoProxy": "允许此环境不使用代理打开",
   "pd.allowNoProxyOn": "此环境访问的每个网站以及与之通信的其他服务，都会看到本机的真实 IP 地址。用于查阅文档或测试指纹没问题，但不适合重要账号。此设置仅对此环境生效。",
+  "pd.watchExit": "此环境的出口 IP 变化时关闭该环境",
+  "pd.watchExitOn":
+    "环境打开期间，每分钟通过该环境自己的代理复查一次出口地址，地址变了就关闭浏览器。只有当每个请求都从账号养熟的地址发出时，账号才是安全的。轮换代理或移动代理本就会更换地址——这类环境请保持关闭。",
+  "pd.watchExitOff": "需要代理才能监视出口。",
   "pd.exit": "出口",
   "pd.machine": "机型",
   "pd.machineHint": "一台真实机器的完整实测配置。分别挑选 User-Agent 和 GPU，正是环境最终描述出不存在设备的原因。",

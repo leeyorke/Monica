@@ -22,7 +22,11 @@ fury-shared = { path = "../../shared-rs" }
 # cannot compute it differently. See platform-rs/src/dirs.rs.
 fury-platform = { path = "../../platform-rs" }
 
-tauri = { version = "2", features = [] }
+# `tray-icon` for the optional minimize-to-tray behaviour (Settings.minimize_to_tray):
+# closing the window hides it to a tray icon instead of quitting, so open profiles
+# keep their locks and relays while the shell is out of the way. Off by default and
+# built here rather than gated at runtime, because the tray is compiled in either way.
+tauri = { version = "2", features = ["tray-icon"] }
 # Two copies of the shell would each keep a profile lock alive and each show a
 # stale view of the other's work. See the comment in main.rs.
 tauri-plugin-single-instance = "2"
