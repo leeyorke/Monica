@@ -341,10 +341,12 @@ fn main() {
             // hung here for good (see update.rs, request_restart). Whatever
             // happens to the call, the exit goes on after 1.5 s.
             match event {
-                // Intercept the close so minimize-to-tray can hide the window
-                // instead of letting it quit. The agent keeps running either
-                // way; hiding leaves the shell reachable from the tray while
-                // open profiles stay up. The setting is read here, on every
+                // Intercept the close so minimize-to-tray can hide the window to
+                // the tray instead of letting it quit — the agent and the open
+                // profiles' browsers stay up, and the tray icon is the way back.
+                // With that setting off, X closes for real: the flag set below
+                // makes the exit a force shutdown, so nothing is left running
+                // behind a gone window. The setting is read here, on every
                 // close, rather than once at startup, so flipping it in
                 // Settings takes effect on the very next close.
                 RunEvent::WindowEvent {
@@ -354,10 +356,22 @@ fn main() {
                 } if label == "main" => {
                     let minimize = app.state::<AppState>().settings.lock().unwrap().minimize_to_tray;
                     if minimize {
+                        // Hide to the tray: the window goes away, but the agent
+                        // and every open profile's browser stay up, reachable
+                        // again from the tray icon.
                         api.prevent_close();
                         if let Some(w) = app.get_webview_window("main") {
                             let _ = w.hide();
                         }
+                    } else {
+                        // Closing for real: X means quit, like any windowed app,
+                        // so every open profile's browser goes with it rather
+                        // than being left running behind a gone window. The exit
+                        // handler below reads this flag and uses the force
+                        // shutdown.
+                        app.state::<AppState>()
+                            .force_quit
+                            .store(true, Ordering::SeqCst);
                     }
                 }
                 RunEvent::Exit => {
