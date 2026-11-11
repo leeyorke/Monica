@@ -55,7 +55,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          path=$(find desktop/src-tauri/target/release/bundle/nsis -name '*-setup.exe' | head -n1)
+          # tauri build detects the cargo workspace and writes the bundle to the
+          # workspace-root target/, not desktop/src-tauri/target/.
+          path=$(find target/release/bundle/nsis -name '*-setup.exe' | head -n1)
           if [ -z "$path" ]; then
             echo "!! no NSIS installer found under bundle/nsis" >&2
             exit 1
