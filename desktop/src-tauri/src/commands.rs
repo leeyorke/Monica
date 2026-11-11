@@ -1433,6 +1433,7 @@ pub async fn profiles(
                 proxy: p.proxy.map(|x| UiProxy {
                     display: format!("{}:{}", x.host, x.port),
                     country: x.last_country,
+                    exit_ip: x.last_ip,
                     last_timezone: None,
                     id: x.id,
                     name: x.name,
@@ -1480,6 +1481,7 @@ pub async fn profiles(
                 proxy: p.proxy.map(|x| UiProxy {
                     display: format!("{}:{}", x.host, x.port),
                     country: x.last_country,
+                    exit_ip: x.last_ip,
                     last_timezone: None,
                     id: x.id,
                     name: x.name,

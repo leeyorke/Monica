@@ -58,6 +58,12 @@ pub struct LocalProxy {
     pub host: String,
     pub port: u16,
     pub last_country: Option<String>,
+    /// The exit IP itself, from the last check — shown beside the country in
+    /// the sidebar so "134.195.101.171 · US" reads as one place, not just a
+    /// flag. `proxies.list` already returns it; defaulted because older agents
+    /// may not.
+    #[serde(default)]
+    pub last_ip: Option<String>,
     /// The exit's zone from the last check, for the editor to name what
     /// "follow the exit" will resolve to.
     #[serde(default)]
