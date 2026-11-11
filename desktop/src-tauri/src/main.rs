@@ -24,8 +24,9 @@ mod update;
 use std::sync::Mutex;
 use std::time::Duration;
 
+use std::sync::atomic::Ordering;
 use tauri::menu::{Menu, MenuItem};
-use tauri::tray::{TrayIconBuilder, TrayIconEvent};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{Manager, RunEvent, WindowEvent};
 
 use commands::AppState;
@@ -81,6 +82,9 @@ fn main() {
             update::maybe_install_on_start(app.handle());
             let config_dir = app.path().app_config_dir()?;
             let settings = Settings::load(&config_dir);
+            // The tray is built below from a plain string, and `settings` moves
+            // into the managed state — so keep the language out first.
+            let tray_language = settings.language.clone();
 
             let session = Session::new();
             if let Some(url) = settings.server_url.as_deref() {
@@ -113,6 +117,7 @@ fn main() {
                 session,
                 locks: Default::default(),
                 org_key: Default::default(),
+                force_quit: Default::default(),
             });
 
             // A tray icon: the way back in once the window has been hidden to
@@ -120,11 +125,18 @@ fn main() {
             // agent shutdown) cleanly. Built unconditionally rather than only
             // when minimize_to_tray is on, because that setting can be flipped
             // on mid-session — a window hidden before the icon existed would
-            // otherwise have no way back. Labels are English: the tray is
-            // native, outside the React i18n, and the chosen language is not
-            // readable here without a locale dependency this does not need.
-            let show = MenuItem::with_id(app, "show", "Show", true, None::<&str>)?;
-            let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+            // otherwise have no way back.
+            //
+            // Two items, labelled in the language the operator chose (persisted
+            // by the webview through `set_language`). The tray is native, outside
+            // the React i18n, so it reads the persisted language here rather than
+            // the live one; a change takes effect on the next launch.
+            let (show_label, quit_label) = match tray_language.as_str() {
+                "zh" => ("主窗口", "退出"),
+                _ => ("Show", "Quit"),
+            };
+            let show = MenuItem::with_id(app, "show", show_label, true, None::<&str>)?;
+            let quit = MenuItem::with_id(app, "quit", quit_label, true, None::<&str>)?;
             let tray_menu = Menu::with_items(app, &[&show, &quit])?;
             let mut tray = TrayIconBuilder::with_id("fury-tray")
                 .icon(app.default_window_icon().expect("window icon").clone())
@@ -132,13 +144,29 @@ fn main() {
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "show" => show_main(app),
-                    "quit" => app.exit(0),
+                    // Quit means quit: flag a force shutdown so the exit handler
+                    // stops every open profile's browser too, then exit.
+                    "quit" => {
+                        app.state::<AppState>()
+                            .force_quit
+                            .store(true, Ordering::SeqCst);
+                        app.exit(0);
+                    }
                     _ => {}
                 })
                 .on_tray_icon_event(|tray, event| {
-                    // Left click (no menu) restores the window — the usual tray
-                    // convention.
-                    if let TrayIconEvent::Click { .. } = event {
+                    // Left click restores the window — the usual tray convention.
+                    // A right click ALSO arrives as `Click`, but it must do
+                    // nothing here: `show_main` steals focus, and that focus
+                    // change dismisses the context menu the platform opens for
+                    // the right click, so the menu never stayed up. Filtering to
+                    // the left button leaves the right click to open the menu.
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
                         show_main(tray.app_handle());
                     }
                 })
@@ -203,6 +231,7 @@ fn main() {
             update::open_url,
             commands::set_remember_org_key,
             commands::set_minimize_to_tray,
+            commands::set_language,
             commands::audit,
             commands::org_members,
             commands::invite,
@@ -332,23 +361,36 @@ fn main() {
                     }
                 }
                 RunEvent::Exit => {
+                    // The tray menu's Quit sets force_quit: quitting means
+                    // quitting, so every open profile's browser is stopped too,
+                    // not just this window. Every other exit keeps the polite
+                    // `when_idle` shutdown, which lets the agent outlive the
+                    // window while profiles are open.
+                    //
+                    // The force call returns at once — the agent answers before
+                    // it stops the profiles, then finishes on its own — so a
+                    // short deadline is enough even with profiles open. The
+                    // when_idle call keeps its 1.5 s bound.
+                    let force = app.state::<AppState>().force_quit.load(Ordering::SeqCst);
+                    let (params, deadline) = if force {
+                        (serde_json::json!({ "force": true }), Duration::from_millis(5000))
+                    } else {
+                        (serde_json::json!({ "when_idle": true }), Duration::from_millis(1500))
+                    };
                     let (done, wait) = std::sync::mpsc::channel();
                     std::thread::spawn(move || {
                         if let Ok(rt) = tokio::runtime::Builder::new_current_thread().enable_all().build() {
                             rt.block_on(async {
                                 let _ = tokio::time::timeout(
-                                    Duration::from_millis(1500),
-                                    agent::call::<serde_json::Value>(
-                                        "agent.shutdown",
-                                        serde_json::json!({ "when_idle": true }),
-                                    ),
+                                    deadline,
+                                    agent::call::<serde_json::Value>("agent.shutdown", params),
                                 )
                                 .await;
                             });
                         }
                         let _ = done.send(());
                     });
-                    let _ = wait.recv_timeout(Duration::from_millis(1600));
+                    let _ = wait.recv_timeout(deadline + Duration::from_millis(100));
                 }
                 _ => {}
             }

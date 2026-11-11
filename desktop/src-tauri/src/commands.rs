@@ -53,6 +53,15 @@ pub struct AppState {
     /// lives exactly as long as the process and no longer. Signing out drops
     /// it; so does quitting. That is the intended cost of the design.
     pub org_key: Mutex<Option<[u8; 32]>>,
+
+    /// Set by the tray menu's Quit, read by the `RunEvent::Exit` handler.
+    ///
+    /// Quit means quit: every open profile's browser goes with it, not just the
+    /// window. Ordinary exits (a closed window, with the agent outliving it on
+    /// purpose) leave the flag false and keep the polite `when_idle` shutdown.
+    /// The tray handler and the exit handler are two different closures, so the
+    /// decision has to live somewhere both can read — and this is it.
+    pub force_quit: std::sync::atomic::AtomicBool,
 }
 
 /// A failed call, in the same shape the browser transport produces.
@@ -1938,6 +1947,20 @@ pub async fn set_minimize_to_tray(state: State<'_, AppState>, minimize: bool) ->
             .map_err(|e| ApiErr::local(format!("Could not save settings: {e}")))?;
     }
     shell_state(state).await
+}
+
+/// The interface language the tray should use, persisted so the tray menu (built
+/// in Rust at startup, outside the webview's i18n) can be labelled in the
+/// language the operator chose. The webview sends its *resolved* language here —
+/// never "system", which means nothing to the tray. Only read on the next
+/// launch: the tray menu is built once, in `setup`.
+#[tauri::command]
+pub async fn set_language(state: State<'_, AppState>, language: String) -> Result<(), ApiErr> {
+    let mut s = state.settings.lock().unwrap();
+    s.language = language;
+    s.save(&state.config_dir)
+        .map_err(|e| ApiErr::local(format!("Could not save settings: {e}")))?;
+    Ok(())
 }
 
 /// Who did what. Owners and admins only — the server decides that, not this.

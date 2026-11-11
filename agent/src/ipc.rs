@@ -702,6 +702,33 @@ impl Agent {
             // and pushed its bundle (start_reaper). Anything that uses the
             // agent again in the meantime -- the shell reopening, a launch,
             // MCP -- calls `status` or `profile.launch` and cancels that.
+            // The tray menu's Quit: a real exit, not the polite `when_idle`
+            // kind. Every open profile is stopped here — which closes its
+            // Chromium child and drops its lock and relay — so that nothing is
+            // left running behind a quit. The shell spawned us detached and
+            // holds no handle on this process, so this call is the only thing
+            // that stands between Quit and an orphaned agent and browsers.
+            //
+            // The answer goes back at once, before the stops: the shell is
+            // quitting and must not sit waiting on a graceful close of every
+            // profile. We are detached, so we outlive it long enough to finish
+            // the stops and then exit on our own.
+            "agent.shutdown" if params.get("force").and_then(|v| v.as_bool()) == Some(true) => {
+                let agent = self.me.get().and_then(|w| w.upgrade());
+                tokio::spawn(async move {
+                    if let Some(agent) = agent {
+                        let ids: Vec<String> =
+                            agent.running.lock().await.keys().cloned().collect();
+                        for id in ids {
+                            let _ = agent.stop(&id).await;
+                        }
+                    }
+                    tracing::info!("force shutdown: all profiles stopped; exiting");
+                    std::process::exit(0);
+                });
+                Ok(json!({ "stopping": true, "forced": true }))
+            }
+
             "agent.shutdown" if params.get("when_idle").and_then(|v| v.as_bool()) == Some(true) => {
                 if !self.idle().await {
                     self.exit_when_idle.store(true, std::sync::atomic::Ordering::SeqCst);

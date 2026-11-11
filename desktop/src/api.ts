@@ -995,6 +995,12 @@ export const api = {
   setMinimizeToTray: (minimize: boolean): Promise<Shell> =>
     cmd<Shell>("set_minimize_to_tray", { minimize }),
 
+  /** Persist the interface language for the tray menu, which is built in Rust
+   *  and so reads it on the next launch rather than from the live webview.
+   *  Pass the *resolved* language, never "system". */
+  setLanguage: (language: string): Promise<void> =>
+    cmd<void>("set_language", { language }),
+
   invite: (email: string, role: string): Promise<{ code: string; expires_in_hours: number }> =>
     cmd("invite", { email, role }),
 

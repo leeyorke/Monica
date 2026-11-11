@@ -107,10 +107,24 @@ pub struct Settings {
     /// setting only decides what the window's close button does.
     #[serde(default)]
     pub minimize_to_tray: bool,
+
+    /// The interface language the tray menu should be labelled in, as the
+    /// webview's *resolved* language code ("en", "zh", … — never "system").
+    ///
+    /// The tray is built in Rust at startup, outside the webview, which is why
+    /// this is persisted rather than asked of the running interface. Defaults to
+    /// English; the webview overwrites it with the operator's choice whenever
+    /// they change the language, and the tray picks it up on the next launch.
+    #[serde(default = "default_language")]
+    pub language: String,
 }
 
 fn yes() -> bool {
     true
+}
+
+fn default_language() -> String {
+    "en".into()
 }
 
 impl Settings {
@@ -141,6 +155,7 @@ impl Settings {
                 ork_generations: Default::default(),
                 remember_org_key: true,
                 minimize_to_tray: false,
+                language: default_language(),
                 server_url: None,
                 machine_id: new_machine_id(),
             },

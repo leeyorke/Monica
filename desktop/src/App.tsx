@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n, type Key } from "./i18n";
-import { api, ApiError, type LocalProxy, type Me, type MirrorStatus, type Profile, type Project, type Shell, type UpdateProgress, type WarmProgress, type Farm } from "./api";
+import { api, isDesktop, ApiError, type LocalProxy, type Me, type MirrorStatus, type Profile, type Project, type Shell, type UpdateProgress, type WarmProgress, type Farm } from "./api";
 import { Login } from "./components/Login";
 import { ProfileDialog } from "./components/ProfileDialog";
 import { BulkProfiles } from "./components/BulkProfiles";
@@ -277,7 +277,7 @@ export function App() {
   // Applied at the root before anything renders, so the first paint is already
   // the right theme rather than a flash of the wrong one.
   useTheme();
-  const { t, say } = useI18n();
+  const { t, say, resolved } = useI18n();
   const { ask, dialog: askDialog } = useAsk();
 
   const [fatal, setFatal] = useState<string | null>(null);
@@ -288,6 +288,14 @@ export function App() {
     // that looks like it is still starting, and never will.
     api.shell().then(setShell, (e) => setFatal(say(e)));
   }, []);
+
+  // Keep the tray menu's language in step. The tray is built in Rust from a
+  // persisted string, not from this webview, so the resolved language is pushed
+  // here — on launch and whenever the operator changes it. "system" never
+  // reaches Rust: it means nothing to the tray, `resolved` is the real one.
+  useEffect(() => {
+    if (isDesktop) void api.setLanguage(resolved);
+  }, [resolved]);
 
   // ⌘K, or Ctrl+K where there is no command key. Registered on the window so it
   // works from anywhere, including with focus in the search field.
