@@ -604,6 +604,8 @@ export const pt: Record<Key, string> = {
   "pd.watchExit": "Fechar este perfil se o IP de saída mudar",
   "pd.watchExitOn": "Enquanto o perfil está aberto, o endereço de saída é verificado de novo a cada minuto através do proxy do próprio perfil, e o navegador fecha se tiver mudado. Uma conta só está segura enquanto cada pedido sai do endereço onde envelheceu. Um proxy rotativo ou móvel muda de endereço de propósito — deixe isto desligado para um desses.",
   "pd.watchExitOff": "Precisa de um proxy para vigiar a saída.",
+  "bar.exitIpTripped":
+    "O IP de saída de “{name}” mudou enquanto estava aberto, por isso a ligação foi cortada. O navegador continua aberto mas nada carrega. Feche-o e abra-o de novo para obter uma nova saída.",
   "pd.exit": "Saída",
   "pd.machine": "Máquina",
   "pd.machineHint": "A configuração medida de uma máquina real, tomada por inteiro. Escolher um user agent e uma GPU separadamente é como os perfis acabam descrevendo dispositivos que não existem.",

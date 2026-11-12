@@ -220,11 +220,18 @@ struct Running {
     relay: tokio::task::JoinHandle<()>,
     /// Watches the exit IP while the browser runs, for a profile that asked for
     /// it (`disconnect_on_ip_change`). Re-resolves the exit through this
-    /// profile's own relay every so often and closes the browser if the address
-    /// moved. `None` for a profile that did not ask — the common case, and a
-    /// rotating proxy must not be closed out from under itself. Aborted on
-    /// stop, like `relay` and `heartbeat`, for the same leaked-task reason.
+    /// profile's own relay every so often and, on a move, trips the relay so
+    /// every target fails closed while the browser stays open. `None` for a
+    /// profile that did not ask — the common case, and a rotating proxy must
+    /// not be tripped out from under itself. Aborted on stop, like `relay` and
+    /// `heartbeat`, for the same leaked-task reason.
     ip_watch: Option<tokio::task::JoinHandle<()>>,
+    /// The relay's trip switch, shared with the IP-watch task above. `true`
+    /// once the exit was seen to move: the relay refuses every target and the
+    /// browser is offline until someone acts. Read by `running_state` so the
+    /// shell can say why a profile that is still open has gone dark. `None`
+    /// when there was no proxy to watch.
+    trip: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
 }
 
 /// The backstop for an entry that leaves the map by any road but `stop`.
@@ -1709,13 +1716,30 @@ impl Agent {
                 // Asked, never removed. Removing a dead entry here took it away
                 // from the reaper, whose `stop` is what pushes a team profile's
                 // session and releases its lock; see `impl Drop for Running`.
+                // Alongside which of those open profiles the exit guard has
+                // tripped: the relay is refusing every target because the exit
+                // IP moved. The browser is still up, so `running` alone would
+                // show a live profile that has silently gone dark — this is how
+                // the shell says why. Read here, on the poll the shell already
+                // makes, rather than a push channel the codebase does not have.
+                let mut tripped: std::collections::HashSet<String> =
+                    std::collections::HashSet::new();
                 let running: std::collections::HashSet<String> = self
                     .running
                     .lock()
                     .await
                     .iter_mut()
                     .filter_map(|(id, entry)| {
-                        matches!(entry.child.try_wait(), Ok(None)).then(|| id.clone())
+                        let open = matches!(entry.child.try_wait(), Ok(None));
+                        if open
+                            && entry
+                                .trip
+                                .as_ref()
+                                .is_some_and(|t| t.load(std::sync::atomic::Ordering::Relaxed))
+                        {
+                            tripped.insert(id.clone());
+                        }
+                        open.then(|| id.clone())
                     })
                     .collect();
                 // The list is the only place the shell learns what is open, so
@@ -1726,6 +1750,7 @@ impl Agent {
                     .map(|p| {
                         let mut v = serde_json::to_value(&p).unwrap_or_default();
                         v["running"] = json!(running.contains(&p.id));
+                        v["relay_tripped"] = json!(tripped.contains(&p.id));
                         v
                     })
                     .collect();
@@ -3060,6 +3085,13 @@ impl Agent {
         let exit_upstream = proxy.map(|_| upstream.clone());
         let relay = crate::relay::Relay::new(upstream).blocking(blocked);
         let start_page = relay.start_url();
+        // Cloned out before `serve` consumes the relay: the IP-watch task sets
+        // this when the exit moves, and every connection the relay then handles
+        // fails closed. Created unconditionally because the handle has to be
+        // taken before the relay is consumed, but only armed (stored on the
+        // Running entry and handed to the watcher) when a proxy is present to
+        // watch — see `watch_exit` below.
+        let trip = relay.trip_handle();
         let (relay_port, relay_task) = relay.serve(0).await?;
         // The detect-suite probe, on the relay's own loopback address rather
         // than on `fury.invalid`, and the difference is not cosmetic: loopback
@@ -3445,6 +3477,13 @@ impl Agent {
         // Already beating since the launch began; the running entry owns it now.
         let heartbeat = heartbeat_guard.0.take();
 
+        // The watch task and the running entry share the one trip switch: the
+        // task sets it, the relay reads it, and profiles.list reports it. Only
+        // armed when there is a proxy to watch — with no proxy the exit is this
+        // machine and there is nothing to guard, so the entry carries `None`
+        // and the relay never trips.
+        let watch_trip = watch_exit.then(|| trip.clone());
+
         self.running.lock().await.insert(
             profile.id.clone(),
             Running {
@@ -3459,13 +3498,16 @@ impl Agent {
                 lock_token,
                 heartbeat,
                 ip_watch: None,
+                trip: watch_trip.clone(),
             },
         );
 
         // Watch the exit for a profile that asked for it. The address it opened
-        // on is the baseline; a poll that sees a different one closes the
-        // browser, because the account is only safe while every request leaves
-        // from the address it was aged on.
+        // on is the baseline; a poll that sees a different one trips the relay,
+        // which fails every target closed while the browser stays open — the
+        // account is only safe while every request leaves from the address it
+        // was aged on, and an operator left sitting in a dark browser can see
+        // that something happened rather than finding the profile closed.
         //
         // Owns its own upstream and its own relay dial rather than sharing the
         // browser's: the question travels through the same exit, so the checker
@@ -3473,8 +3515,7 @@ impl Agent {
         // thing that makes asking a third party acceptable (docs/05).
         if watch_exit {
             if let Some(baseline) = launch_ip.clone() {
-                let me = self.me.get().and_then(|w| w.upgrade());
-                if let Some(agent) = me {
+                if let Some(trip) = watch_trip {
                     let watch_profile = profile.id.clone();
                     let watch_upstream = exit_upstream.clone();
                     let checker = proxy
@@ -3497,9 +3538,14 @@ impl Agent {
                                     profile = %watch_profile,
                                     opened_on = %baseline,
                                     now_on = ?facts.ip,
-                                    "the exit IP changed under an open profile — closing it"
+                                    "the exit IP changed under an open profile — tripping the relay"
                                 );
-                                let _ = agent.stop(&watch_profile).await;
+                                // Leave the browser open and offline rather
+                                // than closing it: the operator sees what
+                                // happened. The profile is still "running" in
+                                // every other respect, so the shell is told
+                                // why it went dark through `running_state`.
+                                trip.store(true, std::sync::atomic::Ordering::Relaxed);
                                 return;
                             }
                         }
@@ -4023,6 +4069,7 @@ mod exit_check_tests {
                 background: false,
                 relay: tokio::spawn(async {}),
                 ip_watch: None,
+                trip: None,
             },
         );
         let flag = || agent.exit_when_idle.load(std::sync::atomic::Ordering::SeqCst);

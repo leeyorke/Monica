@@ -110,6 +110,11 @@ pub struct LocalProfile {
     /// existed.
     #[serde(default)]
     pub disconnect_on_ip_change: bool,
+    /// Set by the agent when the exit IP changed under an open profile and the
+    /// relay tripped: every target now fails closed and the browser is offline.
+    /// `false` when the profile is not running, or is running normally.
+    #[serde(default)]
+    pub relay_tripped: bool,
     #[serde(default)]
     pub start_urls: Vec<String>,
     /// Absent from the trash listing, where nothing is running by definition.

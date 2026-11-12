@@ -685,6 +685,8 @@ const en = {
   "pd.watchExitOn":
     "While the profile is open its exit address is re-checked every minute through the profile's own proxy, and the browser closes if it has moved. An account is only safe while every request leaves from the address it was aged on. A rotating or mobile proxy changes its address on purpose — leave this off for one.",
   "pd.watchExitOff": "Needs a proxy to watch.",
+  "bar.exitIpTripped":
+    "The exit IP of “{name}” changed while it was open, so its connection has been cut. The browser is still up but nothing loads. Close it and open it again to get a fresh exit.",
   "pd.exit": "Exit",
   "pd.machine": "Machine",
   "pd.machineHint":
@@ -1999,6 +2001,8 @@ const ru: Record<Key, string> = {
   "pd.watchExitOn":
     "Пока профиль открыт, его выходной адрес проверяется через собственный прокси профиля раз в минуту, и браузер закрывается, если адрес изменился. Аккаунт в безопасности, только пока каждый запрос уходит с того адреса, на котором он обрастал историей. Ротационный или мобильный прокси меняет адрес намеренно — для него это оставьте выключенным.",
   "pd.watchExitOff": "Нужен прокси, чтобы следить за выходом.",
+  "bar.exitIpTripped":
+    "Выходной IP профиля «{name}» изменился, пока он был открыт, поэтому соединение прервано. Браузер остался запущенным, но ничего не загружается. Закройте его и откройте снова, чтобы получить новый выход.",
   "pd.exit": "Выход",
   "pd.machine": "Машина",
   "pd.machineHint":
@@ -3264,6 +3268,8 @@ const zh: Record<Key, string> = {
   "pd.watchExitOn":
     "环境打开期间，每分钟通过该环境自己的代理复查一次出口地址，地址变了就关闭浏览器。只有当每个请求都从账号养熟的地址发出时，账号才是安全的。轮换代理或移动代理本就会更换地址——这类环境请保持关闭。",
   "pd.watchExitOff": "需要代理才能监视出口。",
+  "bar.exitIpTripped":
+    "环境“{name}”打开期间出口 IP 发生变化，连接已被切断。浏览器仍在运行但无法加载任何内容。请关闭后重新打开，以获取新的出口。",
   "pd.exit": "出口",
   "pd.machine": "机型",
   "pd.machineHint": "一台真实机器的完整实测配置。分别挑选 User-Agent 和 GPU，正是环境最终描述出不存在设备的原因。",

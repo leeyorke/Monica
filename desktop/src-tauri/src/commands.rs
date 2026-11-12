@@ -1286,6 +1286,11 @@ pub struct UiProfile {
     /// does not manage this — the agent does, at launch time).
     #[serde(default)]
     pub disconnect_on_ip_change: bool,
+    /// The exit IP moved under an open profile and the relay tripped: the
+    /// browser is up but every target fails closed. Read off the agent's
+    /// profiles.list poll so the shell can say why a live profile went dark.
+    #[serde(default)]
+    pub relay_tripped: bool,
     /// `None` means "follow the proxy's exit", resolved by the agent at launch.
     /// Carried here because the edit dialog round-trips it — without these two
     /// fields, opening a profile and pressing save silently reset both.
@@ -1404,6 +1409,7 @@ async fn local_profiles() -> R<Vec<UiProfile>> {
             permissions: all_permissions(),
             allow_no_proxy: p.allow_no_proxy,
             disconnect_on_ip_change: p.disconnect_on_ip_change,
+            relay_tripped: p.relay_tripped,
             blocklists: p.blocklists,
             notes: p.notes,
             status: p.status,
@@ -1458,6 +1464,7 @@ pub async fn profiles(
                 permissions: all_permissions(),
                 allow_no_proxy: p.allow_no_proxy,
             disconnect_on_ip_change: p.disconnect_on_ip_change,
+            relay_tripped: p.relay_tripped,
             blocklists: p.blocklists,
                 notes: p.notes,
                 status: p.status,
@@ -1507,6 +1514,7 @@ pub async fn profiles(
                 permissions: all_permissions(),
                 allow_no_proxy: p.allow_no_proxy,
             disconnect_on_ip_change: p.disconnect_on_ip_change,
+            relay_tripped: p.relay_tripped,
             blocklists: p.blocklists,
                 notes: p.notes,
                 status: p.status,
@@ -1549,6 +1557,7 @@ pub async fn profiles(
             // colleague's machine.
             allow_no_proxy: false,
             disconnect_on_ip_change: false,
+            relay_tripped: false,
             id: p.id.to_string(),
             project_id: Some(p.project_id.to_string()),
             project_name: Some(p.project_name),
@@ -3084,6 +3093,7 @@ pub async fn trash(state: State<'_, AppState>) -> R<Vec<UiProfile>> {
         .map(|(i, p)| UiProfile {
             allow_no_proxy: p.allow_no_proxy,
             disconnect_on_ip_change: p.disconnect_on_ip_change,
+            relay_tripped: p.relay_tripped,
             proxy: p.proxy.map(|x| UiProxy {
                 display: format!("{}:{}", x.host, x.port),
                 country: x.last_country,
@@ -4367,6 +4377,7 @@ pub async fn shared_with_me(state: State<'_, AppState>) -> R<Vec<UiProfile>> {
             // listing above.
             allow_no_proxy: false,
             disconnect_on_ip_change: false,
+            relay_tripped: false,
             id: r.id,
             // Not in any project of this account's: it is in the OWNER's
             // project, which this account cannot see and has no business
@@ -4746,6 +4757,7 @@ mod upload_tests {
             project_name: None,
             allow_no_proxy: false,
             disconnect_on_ip_change: false,
+            relay_tripped: false,
             name: "RU".into(),
             notes: String::new(),
             status: String::new(),

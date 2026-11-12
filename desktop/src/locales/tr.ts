@@ -604,6 +604,8 @@ export const tr: Record<Key, string> = {
   "pd.watchExit": "Çıkış IP'si değişirse bu profili kapat",
   "pd.watchExitOn": "Profil açık olduğu sürece çıkış adresi, profilin kendi proxy'si üzerinden her dakika yeniden kontrol edilir ve adres değişirse tarayıcı kapatılır. Bir hesap, yalnızca her istek üzerinde eskiştiği adresten çıkarken güvendedir. Dönen (rotating) veya mobil bir proxy adresini bilerek değiştirir — böylesi için bunu kapalı bırakın.",
   "pd.watchExitOff": "Çıkışı izlemek için proxy gerekli.",
+  "bar.exitIpTripped":
+    "“{name}” profilinin çıkış IP'si açıkken değişti, bu yüzden bağlantısı kesildi. Tarayıcı hâlâ açık ama hiçbir şey yüklenmiyor. Yeni bir çıkış almak için kapatıp yeniden açın.",
   "pd.exit": "Çıkış",
   "pd.machine": "Makine",
   "pd.machineHint": "Gerçek bir makinenin ölçülmüş yapılandırması, bütün olarak alınmıştır. Kullanıcı aracısını ve GPU'yu ayrı ayrı seçmek, profillerin var olmayan cihazları tarif etmesinin yoludur.",

@@ -604,6 +604,8 @@ export const de: Record<Key, string> = {
   "pd.watchExit": "Dieses Profil schließen, wenn sich seine Exit-IP ändert",
   "pd.watchExitOn": "Solange das Profil geöffnet ist, wird seine Exit-Adresse jede Minute über den eigenen Proxy des Profils neu geprüft, und der Browser schließt sich, wenn sie sich verschoben hat. Ein Konto ist nur sicher, solange jede Anfrage von der Adresse ausgeht, auf der es gealtert ist. Ein rotierender oder mobiler Proxy wechselt seine Adresse absichtlich — lassen Sie dies für einen solchen aus.",
   "pd.watchExitOff": "Zum Überwachen des Exits wird ein Proxy benötigt.",
+  "bar.exitIpTripped":
+    "Die Exit-IP von „{name}“ hat sich während der geöffneten Sitzung geändert, deshalb wurde die Verbindung getrennt. Der Browser läuft weiter, aber es lädt nichts. Schließen Sie ihn und öffnen Sie ihn erneut für einen neuen Exit.",
   "pd.exit": "Ausgang",
   "pd.machine": "Gerät",
   "pd.machineHint": "Die gemessene Konfiguration eines echten Geräts, als Ganzes übernommen. Wer User-Agent und GPU getrennt wählt, erzeugt Profile, die Geräte beschreiben, die es nicht gibt.",

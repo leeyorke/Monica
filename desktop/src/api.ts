@@ -141,6 +141,10 @@ export interface Profile {
   /** Local mode only: the agent knows what it launched. In team mode a
    *  colleague's browser shows up through `lock`, not here. */
   running: boolean;
+  /** The exit IP moved under this open profile and the relay tripped: the
+   *  browser is up but every target now fails closed, so it is offline until
+   *  someone acts. Local running profiles only. */
+  relay_tripped?: boolean;
   last_opened_at: string | null;
 }
 

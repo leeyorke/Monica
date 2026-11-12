@@ -604,6 +604,8 @@ export const id: Record<Key, string> = {
   "pd.watchExit": "Tutup profil ini jika IP keluarnya berubah",
   "pd.watchExitOn": "Selama profil terbuka, alamat keluarnya diperiksa ulang setiap menit melalui proxy milik profil itu sendiri, dan peramban ditutup jika alamatnya berpindah. Sebuah akun hanya aman selama setiap permintaan keluar dari alamat tempat ia menua. Proxy rotasi atau proxy seluler sengaja mengganti alamatnya — biarkan ini mati untuk yang seperti itu.",
   "pd.watchExitOff": "Butuh proxy untuk mengawasi jalur keluar.",
+  "bar.exitIpTripped":
+    "IP keluar “{name}” berubah saat terbuka, jadi koneksinya diputus. Peramban masih terbuka tetapi tidak ada yang dimuat. Tutup lalu buka lagi untuk mendapat jalur keluar baru.",
   "pd.exit": "Jalur keluar",
   "pd.machine": "Mesin",
   "pd.machineHint": "Konfigurasi terukur dari satu mesin nyata, diambil utuh. Memilih user agent dan GPU secara terpisah adalah cara profil berakhir menggambarkan perangkat yang tidak ada.",
