@@ -448,9 +448,12 @@ export function ProfileDialog({
 
   // Watching the exit is only meaningful for a profile that has one: with no
   // proxy the exit is this machine and there is nothing to guard. Offered in
-  // both proxy modes for the same reason as noProxyChoice above — it belongs
-  // beside the proxy, wherever that is being set.
-  const watchExitChoice = hasProxy ? (
+  // both proxy modes and not gated on the inline form being complete — gating
+  // it on `pxComplete` made it pop in only once host AND port were filled, so
+  // on 新建环境 (which opens on "configure" with both empty) the one place an
+  // operator would look for it showed nothing (11.11.2026). The save still
+  // refuses it without a real proxy (`hasProxy && watchExit` below).
+  const watchExitChoice = (
     <div style={{ marginTop: "var(--s-1)" }}>
       <label className="row" style={{ alignItems: "flex-start" }}>
         <input
@@ -465,7 +468,7 @@ export function ProfileDialog({
         {watchExit ? t("pd.watchExitOn") : t("pd.watchExitOff")}
       </p>
     </div>
-  ) : null;
+  );
 
   const pxUrl = () => proxyUrl(pxKind, pxHost, pxPort, pxUser, pxWg ? pxConf : pxPass);
 
